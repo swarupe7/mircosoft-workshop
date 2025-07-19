@@ -7,16 +7,47 @@
         breed: string;
     }
 
+    interface Breed {
+        id: number;
+        name: string;
+    }
+
     export let dogs: Dog[] = [];
     let loading = true;
     let error: string | null = null;
+    let breeds: Breed[] = [];
+    let selectedBreed = 'all';
+    let showAvailable = false;
+    let filterTimeout: NodeJS.Timeout;
+
+    const fetchBreeds = async () => {
+        try {
+            const response = await fetch('/api/breeds');
+            if(response.ok) {
+                const data = await response.json();
+                console.log('Fetched breeds:', data); // Debug log
+                // Fix breed mapping to handle the correct response format
+                breeds = data;
+            }
+        } catch (err) {
+            console.error('Error fetching breeds:', err);
+        }
+    };
 
     const fetchDogs = async () => {
         loading = true;
         try {
-            const response = await fetch('/api/dogs');
+            const params = new URLSearchParams();
+            if (selectedBreed !== 'all') params.append('breed', selectedBreed);
+            if (showAvailable) params.append('available', 'true');
+
+            const url = `/api/dogs?${params.toString()}`;
+            console.log('Fetching dogs with URL:', url); // Debug log
+            const response = await fetch(url);
             if(response.ok) {
-                dogs = await response.json();
+                const data = await response.json();
+                console.log('Fetched dogs:', data); // Debug log
+                dogs = data;
             } else {
                 error = `Failed to fetch data: ${response.status} ${response.statusText}`;
             }
@@ -27,12 +58,51 @@
         }
     };
 
+    // Debounced filter changes
+    const handleFilterChange = () => {
+        clearTimeout(filterTimeout);
+        filterTimeout = setTimeout(() => {
+            if (!loading) {
+                fetchDogs();
+            }
+        }, 300);
+    };
+
+    $: if (selectedBreed) handleFilterChange();
+    $: if (showAvailable !== undefined) handleFilterChange();
+
     onMount(() => {
+        fetchBreeds();
         fetchDogs();
+        
+        return () => {
+            clearTimeout(filterTimeout);
+        };
     });
 </script>
 
 <div>
+    <div class="mb-6 flex gap-4 items-center">
+        <select 
+            bind:value={selectedBreed}
+            class="bg-slate-700 text-slate-100 p-2 rounded-lg border border-slate-600"
+        >
+            <option value="all">All Breeds</option>
+            {#each breeds as breed}
+                <option value={breed.name}>{breed.name}</option>
+            {/each}
+        </select>
+        
+        <label class="flex items-center gap-2 text-slate-100">
+            <input
+                type="checkbox"
+                bind:checked={showAvailable}
+                class="form-checkbox bg-slate-700 border-slate-600 rounded"
+            />
+            Show available only
+        </label>
+    </div>
+
     <h2 class="text-2xl font-medium mb-6 text-slate-100">Available Dogs</h2>
     
     {#if loading}
